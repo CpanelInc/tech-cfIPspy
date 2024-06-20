@@ -1,0 +1,138 @@
+#!/usr/local/cpanel/3rdparty/bin/perl
+# SCRIPT: cfIPspy
+# AUTHOR: Peter Elsner <peter.elsner@webpros.com>
+# PURPOSE: Check a hostname/domain name and if behind CloudFlare proxy, check various sub-domains to obtain real IP address.
+
+use LWP::UserAgent;
+use NetAddr::IP;
+use Cpanel::Validate::IP      ();
+use Cpanel::SafeRun::Timed          ();
+
+sub check_cloudflare_ips {
+    my $chkIP = shift;
+    chomp($chkIP);
+    my $url = URI->new( 'https://www.cloudflare.com/ips-v4' );
+    my $ua  = LWP::UserAgent->new( ssl_opts => { verify_hostname => 0 } );
+    $ua->agent("");
+    my $res = $ua->get($url);
+    my $cf_subnets  = $res->decoded_content;
+    my @cf_subnets  = split /\n/, $cf_subnets;
+    foreach my $cf_subnet (@cf_subnets) {
+        chomp($cf_subnet);
+        my $network = NetAddr::IP->new($cf_subnet);
+        my $ip      = NetAddr::IP->new($chkIP);
+        if ( $ip->within($network) ) {
+            return 1;
+        }
+    }
+}
+
+my $verbose=0;
+
+my $hostIP = shift;
+chomp($hostIP);
+my $isValidIP=0;
+$isValidIP = Cpanel::Validate::IP::is_valid_ip($hostIP);
+
+my $host;
+if ( $isValidIP ) {         ## IP address was entered.
+    print "Please enter a domain name or hostname and not an IP address.\n";
+    exit;
+}
+else {          ## Domain name was entered
+    my $reversedIP = qx[ dig $hostIP +short 2>/dev/null | egrep '[0-9].*' ];
+    my @reversedIP = split( /\n/, $reversedIP );
+    foreach $revip (@reversedIP) {
+        chomp($revip);
+        if ( check_cloudflare_ips( $revip )) {
+            print "You entered a hostname of $hostIP which resolves to a CloudFlare IP address!\n";
+            print "\t\\_ $revip\n";
+            last;
+        }
+        else {
+            print "You entered a hostname of $hostIP which resolves to: $revip and does NOT belong to CloudFlare.\n";
+            exit;
+        }
+    }
+    $host=$hostIP;
+}
+
+
+my @subs = qw(
+    account
+    sso
+    login
+    mail
+    cpanel
+    webmail
+    webdisk
+    whm
+    store
+    www
+    ftp
+    mx
+    ns1
+    ns2
+    status
+    secure
+    smtp
+    news
+    newsletter
+    resources
+    blog
+    host
+    server
+    admin
+    test
+    remote
+    portal
+    beta
+    forum
+    pop
+    dev
+    vpn
+    direct-connect
+    direct
+    m
+    mobile
+);
+
+my @sorted_subs=sort(@subs);
+@subs=@sorted_subs;
+
+print "Checking some common subdomains to see if we can obtain a non-CloudFlare IP address (IE: the real server IP)...\n";
+foreach $sub(@subs) {
+    chomp($sub);
+    my $fulldomain;
+    if ( $host =~ /(([\w-]+)\.([\w-]+)){1,2}(\.(\w+)){1,2}/ ) {
+        my $dot = index($host, '.');
+        $dot++;
+        $host = substr($host ,$dot,length($host )); 
+    }
+    $fulldomain = "$sub.$host";
+    print "Checking $fulldomain\n" if ($verbose);
+    my $revip2 = qx[ dig $fulldomain +short  2>/dev/null ];
+    my @revip = split /\n/, $revip2;
+    foreach my $revip( @revip ) {
+        chomp($revip);
+        my $getdomain = qx[ dig -x $revip +short 2>/dev/null ];
+        chomp($getdomain);
+        $getdomain = "No PTR" unless( $getdomain );
+        print "\t\\_ $fulldomain has a non-CloudFlare IP address of $revip [ $getdomain ]\n" unless( check_cloudflare_ips( $revip ));
+    }
+}
+
+print "Checking SPF record for $host to see if it contains an IP Address\n";
+my $spfdns=Cpanel::SafeRun::Timed::timedsaferun( 4, 'dig', $host, 'TXT', '2>/dev/null'  );
+my @spfdns = split /\n/, $spfdns;
+my $spfip;
+foreach my $spfline(@spfdns) {
+    chomp($spfline);
+    next unless( $spfline =~ m/spf1/ );
+    if ( $spfline =~ m/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/) {
+        $spfip = $1;
+        last;
+    }
+}
+print "\t\\_ The IP address found within the spf record for $host is: $spfip\n";
+
