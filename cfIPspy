@@ -8,6 +8,10 @@ use NetAddr::IP;
 use Cpanel::Validate::IP      ();
 use Cpanel::SafeRun::Timed          ();
 
+my $version="1.0";
+
+print "cfIPspy Version: $version\n";
+
 sub check_cloudflare_ips {
     my $chkIP = shift;
     chomp($chkIP);
@@ -55,6 +59,8 @@ else {          ## Domain name was entered
         }
     }
     $host=$hostIP;
+    print "$host doesn't seem to resolve...\n" unless( $reversedIP );
+    exit unless( $reversedIP );
 }
 
 
