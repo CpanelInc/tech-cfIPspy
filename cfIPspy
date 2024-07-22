@@ -8,7 +8,7 @@ use NetAddr::IP;
 use Cpanel::Validate::IP      ();
 use Cpanel::SafeRun::Timed          ();
 
-my $version="1.0";
+my $version="1.1";
 
 print "cfIPspy Version: $version\n";
 
@@ -82,6 +82,7 @@ my @subs = qw(
     status
     secure
     smtp
+    staging
     news
     newsletter
     resources
@@ -128,8 +129,8 @@ foreach $sub(@subs) {
     }
 }
 
-print "Checking SPF record for $host to see if it contains an IP Address\n";
-my $spfdns=Cpanel::SafeRun::Timed::timedsaferun( 4, 'dig', $host, 'TXT', '2>/dev/null'  );
+print "Checking SPF record for $hostIP to see if it contains an IP Address\n";
+my $spfdns=Cpanel::SafeRun::Timed::timedsaferun( 4, 'dig', $hostIP, 'TXT', '2>/dev/null'  );
 my @spfdns = split /\n/, $spfdns;
 my $spfip;
 foreach my $spfline(@spfdns) {
@@ -140,5 +141,6 @@ foreach my $spfline(@spfdns) {
         last;
     }
 }
-print "\t\\_ The IP address found within the spf record for $host is: $spfip\n";
+print "\t\\_ The IP address found within the SPF record for $host is: $spfip\n" if( $spfip );
+print "\t\\_ Unfortunately, no SPF record for $host was found.\n" unless( $spfip );
 
