@@ -46,5 +46,14 @@ Checking some common subdomains to see if we can obtain a non-CloudFlare IP addr
 Checking SPF record for sxxxxxxxx.com to see if it contains an IP Address
 	\_ The IP address found within the spf record for sxxxxxxxx.com is: 4x.xx.xx.10x
 
-
 Note: It does not always work.
+
+You can add it to your .bashrc file as follows:
+
+alias cfIPspy="/usr/local/cpanel/3rdparty/bin/perl <(curl -s https://raw.githubusercontent.com/CpanelInc/tech-cfIPspy/master/cfIPspy) "
+
+Then you can just type: 
+
+cfIPspy domainname.tld
+
+
